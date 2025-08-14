@@ -1,0 +1,55 @@
+## Data preparation
+
+# GWAS sumstat file should look like the following:
+    SNP          A1   A2   BETA      P
+    rs4970383    C    A    -0.0064   
+    rs4475691    C    T    -0.0145   
+    rs13302982   A    G    -0.0232   
+    ...
+# prscxs_convert.sh 파일 작성
+
+nano prscxs_convert.sh
+
+FILE=$1
+OUT=$2
+
+gunzip -c "$FILE" | \
+awk 'BEGIN{OFS="\t"}
+     NR==1 {print "SNP","A1","A2","BETA","SE","P"; next}
+     {
+       print $4,   # SNPID
+             $5,   # Allele1 (effect)
+             $6,   # Allele2 (alternative)
+             $11,  # BETA
+             $12,  # SE
+             $15   # p.value
+     }' | bgzip > "$OUT"
+
+# run bash script
+bash prscxs_convert.sh GWASsummary_Insomnia_Japanese_SakaueKanai2020.auto.txt.gz BBJ_Insomnia.prscsx.tsv.gz
+
+# check file 
+gunzip -c BBJ_CRP.prscsx.tsv.gz|head -n 5 | column -t
+
+# unzip reference file
+tar -xzvf ldblk_1kg_eas.tar.gz
+
+# unzip tsv.gz file
+7z e filename.tsv.gz
+
+# Run PRScsx.py
+cd /mnt/c/Users/chaeyoon/Documents/GWAS_QC/PRScsx
+
+# depression
+for chr in {1..22}; do
+ python PRScsx.py \
+	 --ref_dir=/mnt/c/Users/chaeyoon/Documents/GWAS_QC/ref \
+	 --bim_prefix=/mnt/c/Users/chaeyoon/Documents/GWAS_QC/Imputed/bedfile/final_hg19 \
+   --sst_file=/mnt/c/Users/chaeyoon/Documents/GWAS_QC/GWAS_BBJ_sumstat/BBJ_Depression.prscsx.tsv \
+	 --n_gwas=178630 \
+	 --chrom=$chr \
+	 --pop=EAS \
+	 --phi=1e-2 \
+	 --out_dir=/mnt/c/Users/chaeyoon/Documents/GWAS_QC/PRScsx_Result \
+	 --out_name=BBJ_Depression_PRS
+done
