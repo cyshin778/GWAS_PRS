@@ -1,0 +1,56 @@
+conda activate gwas_study
+
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC/rawData2
+
+# 1. Merge new data
+plink --bfile mymergedata \
+      --bmerge HB00013399.bed HB00013399.bim HB00013399.fam \
+      --make-bed \
+      --out merged
+
+# 2. QC
+plink --bfile merged --mind 0.02 --geno 0.05 --hwe 1e-6 --indep-pairwise 50 5 0.9 --make-bed --out qc_data
+
+# 3. Download tab file
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC sp cykim@147.47.200.154:/storage/bigdata/GENNIELaB/cykim/dbsnp/PASS.Variantsdbsnp_hg19.tab
+
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC/preImputation2 
+
+# 4. Calculate frequency files and compare to TOPMed panel
+plink --bfile qc_data --freq --out qc_data_freq
+head qc_data_freq.frq
+
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC/preImputation2
+
+# 5. Run-plink.sh 스크립트 생성
+perl ../HRC-1000G-check-bim.pl \
+     -r ../PASS.Variantsdbsnp_hg19.tab \
+     -h \
+     -b qc_data.bim \
+     -f qc_data_freq.frq
+ 
+# 6. 실행: Pulls out chromosome info and makes VCF files
+chmod +x ./Run-plink.sh
+./Run-plink.sh
+
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC
+mkdir human_ref
+
+# 7. reference file 다운
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC/human_ref
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz
+gunzip hg19.fa.gz
+
+sed 's/^>chr/>/' hg19.fa > hg19_no_chr.fa 
+samtools faidx hg19_no_chr.fa
+
+cd /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC/preImputation2
+
+# 8. flip
+for i in {1..22}; do bcftools +fixref qc_data-updated-chr$i'.vcf' -Ov -o qc_data-updated_flipped_chr$i'.vcf' -- -d -f /mnt/c/Users/chaeyoon/OneDrive/Documents/GWAS_QC/human_ref/hg19_no_chr.fa  -m flip; done
+
+# 9. sort and zip for imputation
+for i in {1..22}; do
+  bcftools sort -Oz -o topmed_input_chr${i}.vcf.gz qc_data-updated_flipped_chr${i}.vcf
+  tabix -p vcf topmed_input_chr${i}.vcf.gz
+done
